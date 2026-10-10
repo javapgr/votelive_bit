@@ -1,0 +1,165 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Panel docente">
+    <div class="card">
+        <h1>Crear votación</h1>
+
+        <p class="muted">Configura una nueva votación para tu clase.</p>
+
+        <form id="pollForm">
+            <div class="field">
+                <label for="adminKey">Clave del docente</label>
+                <input
+                    id="adminKey"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="Clave de administración"
+                    required
+                />
+            </div>
+
+            <div class="field">
+                <label for="question">Pregunta o título</label>
+
+                <input
+                    id="question"
+                    type="text"
+                    placeholder="¿Quién será el delegado?"
+                    required
+                />
+            </div>
+
+            <div class="field">
+                <label for="description">Descripción</label>
+
+                <textarea
+                    id="description"
+                    rows="3"
+                    placeholder="Información adicional"></textarea>
+            </div>
+
+            <h3>Candidatos u opciones</h3>
+
+            <div id="candidates" class="options">
+                <input
+                    type="text"
+                    class="candidate"
+                    placeholder="Candidato 1"
+                    required
+                />
+
+                <input
+                    type="text"
+                    class="candidate"
+                    placeholder="Candidato 2"
+                    required
+                />
+            </div>
+
+            <div class="actions">
+                <button type="button" id="addCandidate" class="btn secondary">
+                    + Agregar candidato
+                </button>
+
+                <button type="submit" class="btn primary">
+                    Crear votación
+                </button>
+            </div>
+        </form>
+
+        <p id="result" class="message" role="status"></p>
+    </div>
+</MainLayout>
+
+<script>
+    const form = document.querySelector<HTMLFormElement>("#pollForm");
+
+    const candidates = document.querySelector<HTMLDivElement>("#candidates");
+
+    const addButton =
+        document.querySelector<HTMLButtonElement>("#addCandidate");
+
+    const result = document.querySelector<HTMLParagraphElement>("#result");
+
+    addButton?.addEventListener("click", () => {
+        if (!candidates || candidates.children.length >= 20) {
+            return;
+        }
+
+        const input = document.createElement("input");
+
+        input.type = "text";
+
+        input.className = "candidate";
+
+        input.placeholder = `Candidato ${candidates.children.length + 1}`;
+
+        input.required = true;
+
+        candidates.appendChild(input);
+    });
+
+    form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const adminKey =
+            document.querySelector<HTMLInputElement>("#adminKey")?.value ?? "";
+
+        const question =
+            document
+                .querySelector<HTMLInputElement>("#question")
+                ?.value.trim() ?? "";
+
+        const description =
+            document
+                .querySelector<HTMLTextAreaElement>("#description")
+                ?.value.trim() ?? "";
+
+        const options = Array.from(
+            document.querySelectorAll<HTMLInputElement>(".candidate"),
+        ).map((input) => input.value.trim());
+
+        if (!adminKey || !question || options.some((o) => !o)) {
+            return;
+        }
+
+        if (result) result.textContent = "Guardando votación...";
+
+        try {
+            const response = await fetch("/api/polls", {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json",
+
+                    "x-admin-key": adminKey,
+                },
+
+                body: JSON.stringify({
+                    question,
+
+                    description,
+
+                    options,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error ?? "Error al crear");
+            }
+
+            window.location.href = `/votar?code=${encodeURIComponent(data.code)}`;
+        } catch (error) {
+            if (result) {
+                result.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "Error desconocido";
+            }
+        }
+    });
+</script>

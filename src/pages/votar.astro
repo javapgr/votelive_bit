@@ -1,0 +1,278 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+
+---
+
+
+
+<MainLayout title="Votación">
+
+ <section class="card">
+
+  <h1 id="question">Cargando votación...</h1>
+
+
+
+  <p id="description" class="muted"></p>
+
+
+
+  <form id="voteForm" hidden>
+
+   <div id="options" class="options"></div>
+
+
+
+   <div class="actions">
+
+    <button
+
+     type="submit"
+
+     class="btn primary"
+
+     disabled
+
+    >
+
+     Enviar voto (próxima fase)
+
+    </button>
+
+   </div>
+
+  </form>
+
+
+
+  <p id="notice" class="message" role="status"></p>
+
+
+
+  <a href="/alumno" class="btn secondary">
+
+   Volver
+
+  </a>
+
+ </section>
+
+</MainLayout>
+
+
+
+<script>
+
+ interface Poll {
+
+ code: string;
+
+ question: string;
+
+ description: string | null;
+
+ status: string;
+
+ options: {
+
+  id: string;
+
+  name: string;
+
+  position: number;
+
+ }[];
+
+}
+
+
+
+const params = new URLSearchParams(
+
+ window.location.search
+
+);
+
+
+
+const code = params.get("code")?.toUpperCase();
+
+
+
+const question = document.querySelector<HTMLElement>(
+
+ "#question"
+
+);
+
+
+
+const description = document.querySelector<HTMLElement>(
+
+ "#description"
+
+);
+
+
+
+const optionsContainer = document.querySelector<HTMLElement>(
+
+ "#options"
+
+);
+
+
+
+const voteForm = document.querySelector<HTMLFormElement>(
+
+ "#voteForm"
+
+);
+
+
+
+const notice = document.querySelector<HTMLElement>(
+
+ "#notice"
+
+);
+
+
+
+async function loadPoll() {
+
+ if (!code) {
+
+  if (question) question.textContent = "Código no válido";
+
+  return;
+
+ }
+
+
+
+ try {
+
+  const response = await fetch(
+
+   `/api/polls/${encodeURIComponent(code)}`
+
+  );
+
+
+
+  if (!response.ok) {
+
+   throw new Error("Votación no encontrada");
+
+  }
+
+
+
+  const poll: Poll = await response.json();
+
+
+
+  if (question) {
+
+   question.textContent = poll.question;
+
+  }
+
+
+
+  if (description) {
+
+   description.textContent = poll.description ?? "";
+
+  }
+
+
+
+  if (optionsContainer) {
+
+   optionsContainer.replaceChildren();
+
+
+
+   poll.options.forEach((option) => {
+
+    const label = document.createElement("label");
+
+    label.className = "option";
+
+
+
+    const radio = document.createElement("input");
+
+    radio.type = "radio";
+
+    radio.name = "candidate";
+
+    radio.value = option.id;
+
+
+
+    const text = document.createElement("span");
+
+    text.textContent = option.name;
+
+
+
+    label.append(radio, text);
+
+    optionsContainer.appendChild(label);
+
+   });
+
+  }
+
+
+
+  if (voteForm) voteForm.hidden = false;
+
+
+
+  if (notice) {
+
+   notice.textContent =
+
+    poll.status === "draft"
+
+     ? "Votación en borrador. Aún no admite votos."
+
+     : `Estado: ${poll.status}. El registro de votos se habilitará en una fase posterior.`;
+
+  }
+
+ } catch (error) {
+
+  if (question) {
+
+   question.textContent = "No se pudo cargar la votación";
+
+  }
+
+
+
+  if (notice) {
+
+   notice.textContent =
+
+    error instanceof Error
+
+     ? error.message
+
+     : "Error desconocido";
+
+  }
+
+ }
+
+}
+
+
+
+loadPoll();
+
+</script>

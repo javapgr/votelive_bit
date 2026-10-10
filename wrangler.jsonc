@@ -1,0 +1,21 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"compatibility_date": "2026-10-06",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	"name": "votalive",
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "votalive-db",
+			"database_id": "0e19a5f6-e7f0-4af6-8e82-8806ed3cf8f1"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}

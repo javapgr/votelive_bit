@@ -1,0 +1,75 @@
+---
+import "../styles/global.css";
+
+interface Props {
+    title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <title>{title} | VotaLive</title>
+    </head>
+
+    <body>
+        <header>
+            <nav>
+                <a href="/" class="brand">VotaLive</a>
+
+                <div class="links">
+                    <a href="/docente">Docente</a>
+
+                    <a href="/alumno">Alumno</a>
+                </div>
+            </nav>
+        </header>
+
+        <main class="container">
+            <slot />
+        </main>
+    </body>
+</html>
+
+<style>
+    header {
+        background: white;
+
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    nav {
+        max-width: 900px;
+
+        margin: auto;
+
+        padding: 18px 16px;
+
+        display: flex;
+
+        justify-content: space-between;
+
+        align-items: center;
+    }
+
+    .brand {
+        font-size: 24px;
+
+        font-weight: 800;
+
+        color: #087f74;
+    }
+
+    .links {
+        display: flex;
+
+        gap: 20px;
+
+        font-size: 14px;
+    }
+</style>
