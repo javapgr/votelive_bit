@@ -120,12 +120,7 @@ La estructura inicial de la base de datos se encuentra en:
 5. Los alumnos ingresan el código y votan desde su dispositivo.
 
 ## Licencia
-
-Este proyecto no incluye una licencia especificada en este momento. Si quieres, puedes agregar una licencia como MIT o Apache 2.0 según tu necesidad.
-
-## Contribución
-
-Las contribuciones son bienvenidas. Si deseas mejorar la aplicación, puedes abrir un pull request con cambios claros y bien documentados.
+sin licencia
 
 ## Autor
 
