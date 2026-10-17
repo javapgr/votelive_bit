@@ -1,0 +1,138 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Panel docente">
+  <section class="card">
+    <h1>Panel docente</h1>
+    <p class="muted">Consulta tus votaciones y sus indicadores de participación.</p>
+
+    <form id="panelForm">
+      <div class="field">
+        <label for="adminKey">Clave del docente</label>
+        <input id="adminKey" type="password" autocomplete="off" required />
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit">Cargar votaciones</button>
+        <a class="btn secondary" href="/docente">Crear votación</a>
+      </div>
+    </form>
+
+    <div id="filters" class="filters" hidden>
+      <div class="field">
+        <label for="search">Buscar por título o código</label>
+        <input id="search" type="search" placeholder="Escribe para filtrar" />
+      </div>
+      <div class="field">
+        <label for="statusFilter">Estado</label>
+        <select id="statusFilter">
+          <option value="all">Todos</option>
+          <option value="draft">Borrador</option>
+          <option value="open">Abierta</option>
+          <option value="closed">Cerrada</option>
+        </select>
+      </div>
+    </div>
+
+    <p id="notice" class="message" role="status"></p>
+    <div id="polls" class="poll-list"></div>
+  </section>
+</MainLayout>
+
+<script>
+  import { getApiErrorMessage, readApiResponse } from "../lib/client-api";
+
+  interface Poll {
+    code: string;
+    question: string;
+    status: "draft" | "open" | "closed";
+    createdAt: string;
+    totalVotes: number;
+    authorized: number;
+    pending: number;
+    participation: number;
+  }
+
+  const form = document.querySelector<HTMLFormElement>("#panelForm");
+  const filters = document.querySelector<HTMLElement>("#filters");
+  const search = document.querySelector<HTMLInputElement>("#search");
+  const statusFilter = document.getElementById("statusFilter") as HTMLSelectElement | null;
+  const notice = document.querySelector<HTMLElement>("#notice");
+  const pollsContainer = document.querySelector<HTMLElement>("#polls");
+  let polls: Poll[] = [];
+  let loading = false;
+
+  function statusLabel(status: Poll["status"]) {
+    return status === "draft" ? "Borrador" : status === "open" ? "Abierta" : "Cerrada";
+  }
+
+  function render() {
+    if (!pollsContainer) return;
+    const query = search?.value.trim().toLowerCase() ?? "";
+    const selectedStatus = statusFilter?.value ?? "all";
+    const filtered = polls.filter((poll) => {
+      const matchesQuery = !query ||
+        poll.question.toLowerCase().includes(query) ||
+        poll.code.toLowerCase().includes(query);
+      return matchesQuery && (selectedStatus === "all" || poll.status === selectedStatus);
+    });
+
+    pollsContainer.replaceChildren();
+    if (!filtered.length) {
+      pollsContainer.textContent = "No hay votaciones que coincidan con los filtros.";
+      return;
+    }
+
+    filtered.forEach((poll) => {
+      const article = document.createElement("article");
+      article.className = "poll-item";
+      const heading = document.createElement("h2");
+      heading.textContent = poll.question;
+      const metadata = document.createElement("p");
+      metadata.className = "muted";
+      metadata.textContent = `Código: ${poll.code} · Estado: ${statusLabel(poll.status)}`;
+      const metrics = document.createElement("p");
+      metrics.textContent = `Votos: ${poll.totalVotes} · Autorizados: ${poll.authorized} · Pendientes: ${poll.pending} · Participación: ${poll.participation} %`;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const resultsLink = document.createElement("a");
+      resultsLink.className = "btn secondary";
+      resultsLink.href = `/resultados?code=${encodeURIComponent(poll.code)}`;
+      resultsLink.textContent = "Ver resultados";
+      actions.appendChild(resultsLink);
+      article.appendChild(heading);
+      article.appendChild(metadata);
+      article.appendChild(metrics);
+      article.appendChild(actions);
+      pollsContainer.appendChild(article);
+    });
+  }
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (loading) return;
+    const key = document.querySelector<HTMLInputElement>("#adminKey")?.value ?? "";
+    if (!key) return;
+    loading = true;
+    const submit = form.querySelector<HTMLButtonElement>("button[type=submit]");
+    if (submit) submit.disabled = true;
+    if (notice) notice.textContent = "Cargando votaciones...";
+    try {
+      const response = await fetch("/API/admin/polls", { headers: { "x-admin-key": key } });
+      const data = await readApiResponse<{ error?: string; polls?: Poll[] }>(response);
+      if (!response.ok) throw new Error(data.error ?? "No se pudo cargar el panel");
+      polls = data.polls ?? [];
+      if (filters) filters.hidden = false;
+      render();
+      if (notice) notice.textContent = `${polls.length} votación(es) cargada(s).`;
+    } catch (error) {
+      if (notice) notice.textContent = getApiErrorMessage(error);
+    } finally {
+      loading = false;
+      if (submit) submit.disabled = false;
+    }
+  });
+
+  search?.addEventListener("input", render);
+  statusFilter?.addEventListener("change", render);
+</script>

@@ -3,163 +3,380 @@ import MainLayout from "../layouts/MainLayout.astro";
 ---
 
 <MainLayout title="Panel docente">
-    <div class="card">
-        <h1>Crear votación</h1>
+  <div class="card">
+    <h1>Crear votación</h1>
+    <p class="muted">Configura una nueva votación para tu clase.</p>
 
-        <p class="muted">Configura una nueva votación para tu clase.</p>
+    <form id="pollForm">
+      <div class="field">
+        <label for="adminKey">Clave del docente</label>
+        <input
+          id="adminKey"
+          type="password"
+          autocomplete="off"
+          placeholder="Clave de administración"
+          required
+        />
+        <span id="adminKeyError" class="field-error" role="alert"></span>
+      </div>
+      <div class="field">
+        <label for="question">Pregunta o título</label>
+        <input
+          id="question"
+          minlength="5"
+          maxlength="200"
+          type="text"
+          placeholder="¿Quién será el delegado?"
+          required
+        />
+        <span id="questionError" class="field-error" role="alert"></span>
+      </div>
 
-        <form id="pollForm">
-            <div class="field">
-                <label for="adminKey">Clave del docente</label>
-                <input
-                    id="adminKey"
-                    type="password"
-                    autocomplete="off"
-                    placeholder="Clave de administración"
-                    required
-                />
-            </div>
+      <div class="field">
+        <label for="description">Descripción</label>
+        <textarea id="description" maxlength="1000" rows="3" placeholder="Información adicional"
+        ></textarea>
+        <span id="descriptionError" class="field-error" role="alert"></span>
+      </div>
 
-            <div class="field">
-                <label for="question">Pregunta o título</label>
+      <h3>Candidatos u opciones</h3>
 
-                <input
-                    id="question"
-                    type="text"
-                    placeholder="¿Quién será el delegado?"
-                    required
-                />
-            </div>
+      <div id="candidates" class="options">
+        <div class="candidate-field">
+          <input type="text" class="candidate" maxlength="100" placeholder="Candidato 1" required />
+          <span class="field-error candidate-error" role="alert"></span>
+        </div>
+        <div class="candidate-field">
+          <input type="text" class="candidate" maxlength="100" placeholder="Candidato 2" required />
+          <span class="field-error candidate-error" role="alert"></span>
+        </div>
+      </div>
+      <p id="optionsError" class="field-error" role="alert"></p>
 
-            <div class="field">
-                <label for="description">Descripción</label>
+      <div class="actions">
+        <button type="button" id="addCandidate" class="btn secondary">
+          + Agregar candidato
+        </button>
 
-                <textarea
-                    id="description"
-                    rows="3"
-                    placeholder="Información adicional"></textarea>
-            </div>
+        <button type="submit" class="btn primary"> Crear votación </button>
+      </div>
+    </form>
 
-            <h3>Candidatos u opciones</h3>
-
-            <div id="candidates" class="options">
-                <input
-                    type="text"
-                    class="candidate"
-                    placeholder="Candidato 1"
-                    required
-                />
-
-                <input
-                    type="text"
-                    class="candidate"
-                    placeholder="Candidato 2"
-                    required
-                />
-            </div>
-
-            <div class="actions">
-                <button type="button" id="addCandidate" class="btn secondary">
-                    + Agregar candidato
-                </button>
-
-                <button type="submit" class="btn primary">
-                    Crear votación
-                </button>
-            </div>
-        </form>
-
-        <p id="result" class="message" role="status"></p>
-    </div>
+    <p id="result" class="message" role="status"></p>
+    <hr />
+    <h2>Administrar votación</h2>
+    <p>Usa la clave del formulario superior. Genera una credencial por alumno antes de abrir. Cópialas antes de salir: solo se muestran al generarlas.</p>
+    <form id="manageForm">
+      <div class="field"><label for="manageCode">Código de votación</label><input id="manageCode" required pattern="[A-Fa-f0-9]{12}" maxlength="12" /></div>
+      <div class="field"><label for="participantCount">Participantes (1 a 100 por lote)</label><input id="participantCount" type="number" min="1" max="100" value="1" required /></div>
+      <div class="actions">
+        <button class="btn secondary" name="action" value="participants">Generar credenciales</button>
+        <button class="btn primary" name="action" value="open">Abrir votación</button>
+        <button class="btn secondary" name="action" value="closed">Cerrar votación</button>
+      </div>
+    </form>
+    <p id="manageResult" role="status"></p>
+    <section id="qrSection" class="qr-panel" hidden>
+      <h3>Acceso presencial por QR</h3>
+      <p id="qrNotice" class="message" role="status">Genera un QR para que los alumnos puedan acceder.</p>
+      <div class="qr-display">
+        <img id="qrImage" alt="Código QR temporal de acceso" hidden />
+        <div>
+          <p id="qrCountdown" class="qr-countdown" aria-live="polite"></p>
+          <button type="button" id="refreshQr" class="btn secondary">Generar QR vigente</button>
+        </div>
+      </div>
+    </section>
+    <div class="field"><label for="credentials">Credenciales (una por alumno)</label><textarea id="credentials" readonly rows="6"></textarea></div>
+  </div>
 </MainLayout>
 
 <script>
-    const form = document.querySelector<HTMLFormElement>("#pollForm");
+import { getApiErrorMessage, readApiResponse } from "../lib/client-api";
 
-    const candidates = document.querySelector<HTMLDivElement>("#candidates");
 
-    const addButton =
-        document.querySelector<HTMLButtonElement>("#addCandidate");
+const form = document.querySelector<HTMLFormElement>(
+  "#pollForm"
+);
 
-    const result = document.querySelector<HTMLParagraphElement>("#result");
+const candidates = document.querySelector<HTMLDivElement>(
+  "#candidates"
+);
 
-    addButton?.addEventListener("click", () => {
-        if (!candidates || candidates.children.length >= 20) {
-            return;
-        }
+const addButton = document.querySelector<HTMLButtonElement>(
+  "#addCandidate"
+);
 
-        const input = document.createElement("input");
+const result = document.querySelector<HTMLParagraphElement>(
+  "#result"
+);
+let saving = false;
 
-        input.type = "text";
+function setError(element: HTMLElement | null, message = "") {
+  if (element) element.textContent = message;
+}
 
-        input.className = "candidate";
+function validateCreation() {
+  const adminKey = document.querySelector<HTMLInputElement>("#adminKey");
+  const question = document.querySelector<HTMLInputElement>("#question");
+  const description = document.querySelector<HTMLTextAreaElement>("#description");
+  const candidatesInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".candidate"));
+  let valid = true;
 
-        input.placeholder = `Candidato ${candidates.children.length + 1}`;
+  setError(document.querySelector("#adminKeyError"));
+  setError(document.querySelector("#questionError"));
+  setError(document.querySelector("#descriptionError"));
+  setError(document.querySelector("#optionsError"));
+  document.querySelectorAll<HTMLElement>(".candidate-error").forEach((error) => setError(error));
 
-        input.required = true;
+  if (!adminKey?.value.trim()) {
+    setError(document.querySelector("#adminKeyError"), "Introduce la clave del docente.");
+    valid = false;
+  }
+  const questionValue = question?.value.trim() ?? "";
+  if (questionValue.length < 5 || questionValue.length > 200) {
+    setError(document.querySelector("#questionError"), "La pregunta debe tener entre 5 y 200 caracteres.");
+    valid = false;
+  }
+  if ((description?.value.trim().length ?? 0) > 1000) {
+    setError(document.querySelector("#descriptionError"), "La descripción no puede superar 1000 caracteres.");
+    valid = false;
+  }
+  if (candidatesInputs.length < 2 || candidatesInputs.length > 20) {
+    setError(document.querySelector("#optionsError"), "Debes tener entre 2 y 20 opciones.");
+    valid = false;
+  }
+  const options = candidatesInputs.map((input) => input.value.trim());
+  candidatesInputs.forEach((input, index) => {
+    if (!options[index] || options[index].length > 100) {
+      setError(input.parentElement?.querySelector(".candidate-error") ?? null, "La opción es obligatoria y debe tener hasta 100 caracteres.");
+      valid = false;
+    }
+  });
+  const normalized = options.map((option) => option.toLowerCase());
+  if (new Set(normalized).size !== normalized.length) {
+    setError(document.querySelector("#optionsError"), "Las opciones no pueden repetirse.");
+    valid = false;
+  }
+  return valid;
+}
 
-        candidates.appendChild(input);
+addButton?.addEventListener("click", () => {
+  if (!candidates || candidates.children.length >= 20) {
+    return;
+  }
+
+  const field = document.createElement("div");
+  field.className = "candidate-field";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "candidate";
+  input.placeholder = `Candidato ${candidates.children.length + 1}`;
+  input.required = true;
+  input.maxLength = 100;
+  const error = document.createElement("span");
+  error.className = "field-error candidate-error";
+  error.setAttribute("role", "alert");
+  field.appendChild(input);
+  field.appendChild(error);
+  candidates.appendChild(field);
+});
+
+form?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (saving) return;
+  if (!validateCreation()) {
+    if (result) result.textContent = "Corrige los errores indicados antes de continuar.";
+    return;
+  }
+
+  const adminKey = document.querySelector<HTMLInputElement>(
+    "#adminKey"
+  )?.value ?? "";
+
+  const question = document.querySelector<HTMLInputElement>(
+    "#question"
+  )?.value.trim() ?? "";
+
+  const description = document.querySelector<HTMLTextAreaElement>(
+    "#description"
+  )?.value.trim() ?? "";
+
+  const options = Array.from(
+    document.querySelectorAll<HTMLInputElement>(
+      ".candidate"
+    )
+  ).map((input) => input.value.trim());
+
+  if (result) result.textContent = "Guardando votación...";
+  saving = true;
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (submit) submit.disabled = true;
+
+  try {
+    const response = await fetch("/API/polls", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey
+      },
+      body: JSON.stringify({
+        question,
+        description,
+        options
+      })
     });
 
-    form?.addEventListener("submit", async (event) => {
-        event.preventDefault();
+    const data = await readApiResponse<{ error?: string; code?: string }>(response);
 
-        const adminKey =
-            document.querySelector<HTMLInputElement>("#adminKey")?.value ?? "";
+    if (!response.ok) {
+      throw new Error(data.error ?? "Error al crear");
+    }
 
-        const question =
-            document
-                .querySelector<HTMLInputElement>("#question")
-                ?.value.trim() ?? "";
+    if (result) result.textContent = `Votación creada. Código: ${data.code ?? "desconocido"}. Usa el panel inferior para autorizar participantes y abrirla.`;
+    const codeInput = document.querySelector<HTMLInputElement>("#manageCode");
+    if (codeInput && data.code) codeInput.value = data.code;
+  } catch (error) {
+    if (result) {
+      result.textContent =
+        getApiErrorMessage(error);
+    }
+  } finally {
+    saving = false;
+    if (submit) submit.disabled = false;
+  }
+});
 
-        const description =
-            document
-                .querySelector<HTMLTextAreaElement>("#description")
-                ?.value.trim() ?? "";
+</script>
 
-        const options = Array.from(
-            document.querySelectorAll<HTMLInputElement>(".candidate"),
-        ).map((input) => input.value.trim());
+<script>
+  import { getApiErrorMessage, readApiResponse } from "../lib/client-api";
 
-        if (!adminKey || !question || options.some((o) => !o)) {
-            return;
-        }
+  const manageForm = document.querySelector<HTMLFormElement>("#manageForm");
+  let managing = false;
+  manageForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (managing) return;
+    const action = (event.submitter as HTMLButtonElement | null)?.value;
+    if (!action) return;
+    const key = document.querySelector<HTMLInputElement>("#adminKey")?.value;
+    const code = document.querySelector<HTMLInputElement>("#manageCode")?.value.toUpperCase();
+    const count = Number(document.querySelector<HTMLInputElement>("#participantCount")?.value);
+    const message = document.querySelector<HTMLElement>("#manageResult");
+    if (!key) { if (message) message.textContent = "Introduce la clave del docente."; return; }
+    if (action === "closed" && !window.confirm("¿Confirmas que deseas cerrar esta votación? Después no podrá volver a abrirse ni aceptar votos.")) {
+      if (message) message.textContent = "Cierre cancelado.";
+      return;
+    }
+    managing = true;
+    const buttons = manageForm.querySelectorAll<HTMLButtonElement>("button");
+    buttons.forEach((button) => button.disabled = true);
+    try {
+      const response = await fetch(`/API/polls/${code}/manage`, {
+        method: "POST", headers: { "Content-Type": "application/json", "x-admin-key": key },
+        body: JSON.stringify({ action, count })
+      });
+      const data = await readApiResponse<{ error?: string; message?: string; credentials?: string[] }>(response);
+      if (!response.ok) throw new Error(data.error ?? "No se pudo administrar la votación");
+      if (data.credentials) {
+        const output = document.querySelector<HTMLTextAreaElement>("#credentials");
+        if (output) output.value += `${output.value ? "\n" : ""}${code}\n${data.credentials.join("\n")}`;
+      }
+      if (message) {
+        message.textContent = action === "closed"
+          ? "Votación cerrada correctamente. Ya no acepta nuevos votos."
+          : data.message ?? "Credenciales generadas. Cópialas antes de salir.";
+      }
+      if (action === "open") startQrRefresh();
+      if (action === "closed") stopQrRefresh();
+    } catch (error) {
+      if (message) message.textContent = getApiErrorMessage(error);
+    } finally {
+      managing = false;
+      buttons.forEach((button) => button.disabled = false);
+    }
+  });
 
-        if (result) result.textContent = "Guardando votación...";
+  const qrSection = document.querySelector<HTMLElement>("#qrSection");
+  const qrImage = document.querySelector<HTMLImageElement>("#qrImage");
+  const qrNotice = document.querySelector<HTMLElement>("#qrNotice");
+  const qrCountdown = document.querySelector<HTMLElement>("#qrCountdown");
+  const refreshQr = document.querySelector<HTMLButtonElement>("#refreshQr");
+  let qrTimer: number | undefined;
+  let qrCountdownTimer: number | undefined;
+  let qrExpiresAt = 0;
 
-        try {
-            const response = await fetch("/api/polls", {
-                method: "POST",
+  function stopQrRefresh() {
+    if (qrTimer) window.clearInterval(qrTimer);
+    if (qrCountdownTimer) window.clearInterval(qrCountdownTimer);
+    qrTimer = undefined;
+    qrCountdownTimer = undefined;
+    qrExpiresAt = 0;
+    if (qrImage) {
+      qrImage.hidden = true;
+      qrImage.removeAttribute("src");
+    }
+    if (qrCountdown) qrCountdown.textContent = "";
+    if (qrSection) qrSection.hidden = true;
+  }
 
-                headers: {
-                    "Content-Type": "application/json",
+  function expireQr() {
+    if (qrImage) {
+      qrImage.hidden = true;
+      qrImage.removeAttribute("src");
+    }
+    if (qrCountdown) qrCountdown.textContent = "QR vencido";
+    if (qrNotice) qrNotice.textContent = "El QR venció. Generando uno nuevo...";
+  }
 
-                    "x-admin-key": adminKey,
-                },
+  function updateQrCountdown() {
+    if (!qrExpiresAt) return;
+    const seconds = Math.max(0, qrExpiresAt - Math.floor(Date.now() / 1000));
+    if (seconds === 0) expireQr();
+    else if (qrCountdown) qrCountdown.textContent = `Vence en ${seconds} segundo(s).`;
+  }
 
-                body: JSON.stringify({
-                    question,
+  async function loadQr() {
+    const key = document.querySelector<HTMLInputElement>("#adminKey")?.value;
+    const code = document.querySelector<HTMLInputElement>("#manageCode")?.value.trim().toUpperCase();
+    if (!key || !code) return;
+    if (qrImage) {
+      qrImage.hidden = true;
+      qrImage.removeAttribute("src");
+    }
+    if (qrNotice) qrNotice.textContent = "Generando QR vigente...";
+    try {
+      const response = await fetch(`/API/polls/${encodeURIComponent(code)}/qr`, {
+        headers: { "x-admin-key": key }
+      });
+      const data = await readApiResponse<{ error?: string; image?: string; expiresAt?: number }>(response);
+      if (!response.ok || !data.image || !data.expiresAt) {
+        throw new Error(data.error ?? "No se pudo generar el QR");
+      }
+      qrExpiresAt = data.expiresAt;
+      if (qrImage) {
+        qrImage.src = data.image;
+        qrImage.hidden = false;
+      }
+      if (qrNotice) qrNotice.textContent = "Comparte este QR mientras la votación esté abierta.";
+      updateQrCountdown();
+    } catch (error) {
+      if (qrNotice) qrNotice.textContent = getApiErrorMessage(error);
+      expireQr();
+    }
+  }
 
-                    description,
+  function startQrRefresh() {
+    if (qrTimer) window.clearInterval(qrTimer);
+    if (qrCountdownTimer) window.clearInterval(qrCountdownTimer);
+    if (qrSection) qrSection.hidden = false;
+    void loadQr();
+    qrTimer = window.setInterval(() => void loadQr(), 5000);
+    qrCountdownTimer = window.setInterval(updateQrCountdown, 1000);
+  }
 
-                    options,
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error ?? "Error al crear");
-            }
-
-            window.location.href = `/votar?code=${encodeURIComponent(data.code)}`;
-        } catch (error) {
-            if (result) {
-                result.textContent =
-                    error instanceof Error
-                        ? error.message
-                        : "Error desconocido";
-            }
-        }
-    });
+  refreshQr?.addEventListener("click", () => {
+    if (qrSection) qrSection.hidden = false;
+    void loadQr();
+  });
 </script>

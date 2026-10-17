@@ -1,278 +1,177 @@
+
 ---
 import MainLayout from "../layouts/MainLayout.astro";
-
 ---
 
-
-
 <MainLayout title="Votación">
+  <section class="card">
+    <h1 id="question">Cargando votación...</h1>
 
- <section class="card">
+    <p id="description" class="muted"></p>
 
-  <h1 id="question">Cargando votación...</h1>
+    <form id="voteForm" hidden>
+      <div id="options" class="options"></div>
+      <div class="field"><label for="credential">Credencial personal</label><input id="credential" type="password" autocomplete="off" required pattern="[a-fA-F0-9]{32}" minlength="32" maxlength="32" /></div>
 
+      <div class="actions">
+        <button
+          type="submit"
+          class="btn primary"
+          disabled
+        >
+          Enviar voto
+        </button>
+      </div>
+    </form>
 
+    <p id="notice" class="message" role="status"></p>
 
-  <p id="description" class="muted"></p>
-
-
-
-  <form id="voteForm" hidden>
-
-   <div id="options" class="options"></div>
-
-
-
-   <div class="actions">
-
-    <button
-
-     type="submit"
-
-     class="btn primary"
-
-     disabled
-
-    >
-
-     Enviar voto (próxima fase)
-
-    </button>
-
-   </div>
-
-  </form>
-
-
-
-  <p id="notice" class="message" role="status"></p>
-
-
-
-  <a href="/alumno" class="btn secondary">
-
-   Volver
-
-  </a>
-
- </section>
-
+    <a href="/alumno" class="btn secondary">
+      Volver
+    </a>
+  </section>
 </MainLayout>
 
-
-
 <script>
+import { getApiErrorMessage, readApiResponse } from "../lib/client-api";
 
- interface Poll {
 
- code: string;
-
- question: string;
-
- description: string | null;
-
- status: string;
-
- options: {
-
-  id: string;
-
-  name: string;
-
-  position: number;
-
- }[];
-
+interface Poll {
+  code: string;
+  question: string;
+  description: string | null;
+  status: string;
+  options: {
+    id: string;
+    name: string;
+    position: number;
+  }[];
 }
 
-
-
 const params = new URLSearchParams(
-
- window.location.search
-
+  window.location.search
 );
-
-
 
 const code = params.get("code")?.toUpperCase();
 
-
-
 const question = document.querySelector<HTMLElement>(
-
- "#question"
-
+  "#question"
 );
-
-
 
 const description = document.querySelector<HTMLElement>(
-
- "#description"
-
+  "#description"
 );
-
-
 
 const optionsContainer = document.querySelector<HTMLElement>(
-
- "#options"
-
+  "#options"
 );
-
-
 
 const voteForm = document.querySelector<HTMLFormElement>(
-
- "#voteForm"
-
+  "#voteForm"
 );
-
-
 
 const notice = document.querySelector<HTMLElement>(
-
- "#notice"
-
+  "#notice"
 );
 
-
-
 async function loadPoll() {
-
- if (!code) {
-
-  if (question) question.textContent = "Código no válido";
-
-  return;
-
- }
-
-
-
- try {
-
-  const response = await fetch(
-
-   `/api/polls/${encodeURIComponent(code)}`
-
-  );
-
-
-
-  if (!response.ok) {
-
-   throw new Error("Votación no encontrada");
-
+  if (!code || !/^[A-F0-9]{12}$/.test(code)) {
+    if (question) question.textContent = "Código no válido";
+    return;
   }
 
+  try {
+    const response = await fetch(
+      `/API/polls/${encodeURIComponent(code)}`
+    );
 
+    const data = await readApiResponse<{ error?: string } & Partial<Poll>>(response);
+    if (!response.ok) throw new Error(data.error ?? "No se pudo cargar la votación");
+    const poll = data as Poll;
 
-  const poll: Poll = await response.json();
+    if (question) {
+      question.textContent = poll.question;
+    }
 
+    if (description) {
+      description.textContent = poll.description ?? "";
+    }
 
+    if (optionsContainer) {
+      optionsContainer.replaceChildren();
 
-  if (question) {
+      poll.options.forEach((option) => {
+        const label = document.createElement("label");
+        label.className = "option";
 
-   question.textContent = poll.question;
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "candidate";
+        radio.value = option.id;
+        radio.required = true;
+        radio.disabled = poll.status !== "open";
 
+        const text = document.createElement("span");
+        text.textContent = option.name;
+
+        label.appendChild(radio);
+        label.appendChild(text);
+        optionsContainer.appendChild(label);
+      });
+    }
+
+    if (voteForm) voteForm.hidden = false;
+    const submit = voteForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.disabled = poll.status !== "open";
+
+    if (notice) {
+      notice.textContent =
+        poll.status === "draft"
+          ? "Votación en borrador. Aún no admite votos."
+          : poll.status === "open" ? "Votación abierta. Selecciona una opción e introduce tu credencial." : "Votación cerrada. Ya no admite votos.";
+    }
+  } catch (error) {
+    if (question) {
+      question.textContent = "No se pudo cargar la votación";
+    }
+
+    if (notice) {
+      notice.textContent =
+        getApiErrorMessage(error);
+    }
   }
-
-
-
-  if (description) {
-
-   description.textContent = poll.description ?? "";
-
-  }
-
-
-
-  if (optionsContainer) {
-
-   optionsContainer.replaceChildren();
-
-
-
-   poll.options.forEach((option) => {
-
-    const label = document.createElement("label");
-
-    label.className = "option";
-
-
-
-    const radio = document.createElement("input");
-
-    radio.type = "radio";
-
-    radio.name = "candidate";
-
-    radio.value = option.id;
-
-
-
-    const text = document.createElement("span");
-
-    text.textContent = option.name;
-
-
-
-    label.append(radio, text);
-
-    optionsContainer.appendChild(label);
-
-   });
-
-  }
-
-
-
-  if (voteForm) voteForm.hidden = false;
-
-
-
-  if (notice) {
-
-   notice.textContent =
-
-    poll.status === "draft"
-
-     ? "Votación en borrador. Aún no admite votos."
-
-     : `Estado: ${poll.status}. El registro de votos se habilitará en una fase posterior.`;
-
-  }
-
- } catch (error) {
-
-  if (question) {
-
-   question.textContent = "No se pudo cargar la votación";
-
-  }
-
-
-
-  if (notice) {
-
-   notice.textContent =
-
-    error instanceof Error
-
-     ? error.message
-
-     : "Error desconocido";
-
-  }
-
- }
-
 }
 
-
-
 loadPoll();
+
+let sending = false;
+let voted = false;
+voteForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (sending || voted) return;
+  const optionId = voteForm.querySelector<HTMLInputElement>('input[name="candidate"]:checked')?.value;
+  const credentialInput = document.querySelector<HTMLInputElement>("#credential");
+  if (!optionId || !credentialInput) return;
+  sending = true;
+  const submit = voteForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    const response = await fetch(`/API/polls/${code}/votes`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optionId, credential: credentialInput.value.trim().toLowerCase() })
+    });
+    const data = await readApiResponse<{ error?: string; message?: string }>(response);
+    if (!response.ok) throw new Error(data.error ?? "No se pudo registrar el voto");
+    voted = true;
+    credentialInput.value = "";
+    voteForm.hidden = true;
+    if (notice) notice.textContent = data.message ?? "Voto registrado correctamente.";
+  } catch (error) {
+    if (notice) notice.textContent = getApiErrorMessage(error);
+  } finally {
+    sending = false;
+    if (submit) submit.disabled = voted;
+  }
+});
 
 </script>

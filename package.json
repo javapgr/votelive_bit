@@ -16,10 +16,14 @@
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.4",
-    "astro": "^7.3.8"
+    "astro": "^7.3.8",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.10",
     "@types/node": "^26.6.5",
+    "@types/qrcode": "^1.5.6",
+    "typescript": "^6.0.3",
     "wrangler": "^4.149.0"
   }
 }

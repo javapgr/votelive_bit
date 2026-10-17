@@ -1,4 +1,4 @@
-# VotaLive
+ # VotaLive
 
 Una aplicación web para crear y participar en votaciones rápidas desde cualquier dispositivo, pensada para entornos educativos y reuniones con pocos pasos.
 
@@ -11,6 +11,14 @@ VotaLive permite que un docente cree una votación en segundos, comparta un cód
 - Creación de votaciones con pregunta, descripción y múltiples opciones.
 - Generación automática de un código único para la votación.
 - Acceso para estudiantes mediante el código compartido.
+- Consulta protegida de resultados con conteos, porcentajes y participación.
+- Acceso presencial mediante QR rotativo y cookie temporal.
+- Indicador docente del QR con cuenta regresiva y renovación automática.
+- Panel docente con listado, filtros e indicadores de participación.
+- Exportación CSV de resultados cerrados sin credenciales ni identidades.
+- Gráfico porcentual accesible de resultados con identificación de empates.
+- Indicador de conexión y reintentos controlados durante la actualización de resultados.
+- Modo oscuro/claro accesible con preferencia local del navegador.
 - Validación y protección básica de la creación de encuestas.
 - Arquitectura ligera y moderna pensada para despliegue en la nube.
 
@@ -118,6 +126,52 @@ La estructura inicial de la base de datos se encuentra en:
 3. Crea una nueva votación.
 4. Comparte el código generado con los participantes.
 5. Los alumnos ingresan el código y votan desde su dispositivo.
+6. El docente consulta los resultados en `/resultados` con la clave administrativa.
+7. El docente puede consultar el listado general en `/panel`.
+
+Para habilitar el acceso presencial local, configura `QR_SECRET` junto con `ADMIN_KEY`
+en `.dev.vars`. En producción, usa secretos separados mediante Wrangler. El QR
+autoriza temporalmente el acceso, pero cada alumno sigue necesitando su credencial
+personal para votar.
+
+## Pruebas verificadas
+
+Ejecuta la suite funcional con:
+
+```bash
+node --test tests/voting.test.mjs
+```
+
+La prueba automatizada cubre:
+
+| Caso | Cobertura |
+| --- | --- |
+| TC01 | Creación válida y código de 12 caracteres |
+| TC02 | Opciones duplicadas rechazadas con `400` |
+| TC03 | Apertura controlada después de autorizar participantes |
+| TC04 | Voto válido registrado con `201` |
+| TC05 | Credencial repetida rechazada con `409` |
+| TC06 | Voto sin cookie de presencia QR rechazado con `403` |
+| TC07 | QR caducado rechazado por el endpoint de acceso con `403` |
+| TC08 | Voto después del cierre rechazado y resultados definitivos |
+| TC09 | CSV cerrado con BOM UTF-8 y protección contra fórmulas |
+
+La suite también verifica autorización administrativa, conteos, participación,
+ganador, exportación abierta rechazada, error controlado del servidor y firma
+QR. Las capturas de pantalla, la revisión responsive a 375 px y el video de
+demostración son evidencias manuales que deben preparar los integrantes sin
+mostrar secretos ni credenciales reales.
+
+## Mejoras electivas implementadas
+
+- **E3:** `/resultados` muestra una barra proporcional por opción, porcentaje,
+  cantidad de votos y el mensaje de empate cuando corresponde.
+- **E5:** `/resultados` indica el estado de conexión, responde a los eventos
+  `online`/`offline` y reintenta hasta tres veces con esperas de 1, 2 y 4
+  segundos antes de continuar con la actualización periódica.
+- **E1:** el botón `Modo oscuro` del encabezado cambia entre temas, conserva la
+  preferencia en `localStorage` y permite volver al modo claro. Esta preferencia
+  no contiene datos de votación ni secretos.
 
 ## Licencia
 sin licencia

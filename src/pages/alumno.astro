@@ -1,0 +1,56 @@
+
+---
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Participar">
+  <section class="card">
+    <h1>Participar en una votación</h1>
+
+    <p class="muted">
+      Introduce el código proporcionado
+      por tu docente.
+    </p>
+
+    <form id="joinForm">
+      <div class="field">
+        <label for="code">Código de votación</label>
+
+        <input
+          id="code"
+          placeholder="Ejemplo: A1B2C3D4E5F6"
+          minlength="12"
+          pattern="[A-Fa-f0-9]{12}"
+          title="Introduce los 12 caracteres del código, sin espacios."
+          maxlength="12"
+          required
+        />
+      </div>
+
+      <button type="submit" class="btn primary">
+        Ingresar
+      </button>
+    </form>
+  </section>
+</MainLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>(
+    "#joinForm"
+  );
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const input = document.querySelector<HTMLInputElement>(
+      "#code"
+    );
+
+    const code = input?.value.trim().toUpperCase();
+
+    if (!code) return;
+
+    window.location.href =
+      `/votar?code=${encodeURIComponent(code)}`;
+  });
+</script>

@@ -1,0 +1,47 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Acceso presencial">
+  <section class="card">
+    <h1 id="title">Validando acceso...</h1>
+    <p id="notice" class="message" role="status"></p>
+    <a id="continue" class="btn primary" href="#" hidden>Continuar a la votación</a>
+  </section>
+</MainLayout>
+
+<script>
+  import { getApiErrorMessage, readApiResponse } from "../lib/client-api";
+
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code")?.toUpperCase();
+  const slot = Number(params.get("slot"));
+  const sig = params.get("sig");
+  const title = document.querySelector<HTMLElement>("#title");
+  const notice = document.querySelector<HTMLElement>("#notice");
+  const continueLink = document.querySelector<HTMLAnchorElement>("#continue");
+
+  async function enter() {
+    if (!code || !/^[A-F0-9]{12}$/.test(code) || !Number.isInteger(slot) || !sig) {
+      throw new Error("Enlace QR inválido.");
+    }
+    const response = await fetch(`/API/polls/${encodeURIComponent(code)}/enter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot, sig })
+    });
+    const data = await readApiResponse<{ error?: string }>(response);
+    if (!response.ok) throw new Error(data.error ?? "No se pudo autorizar el acceso.");
+    if (title) title.textContent = "Acceso autorizado";
+    if (notice) notice.textContent = "Ya puedes continuar a la votación.";
+    if (continueLink) {
+      continueLink.href = `/votar?code=${encodeURIComponent(code)}`;
+      continueLink.hidden = false;
+    }
+  }
+
+  enter().catch((error) => {
+    if (title) title.textContent = "Acceso rechazado";
+    if (notice) notice.textContent = getApiErrorMessage(error);
+  });
+</script>

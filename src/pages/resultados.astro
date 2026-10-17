@@ -1,0 +1,220 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Resultados">
+  <section class="card">
+    <h1>Resultados de la votación</h1>
+    <p class="muted">Los resultados están protegidos. Introduce la clave docente y el código.</p>
+
+    <form id="resultsForm">
+      <div class="field">
+        <label for="adminKey">Clave del docente</label>
+        <input id="adminKey" type="password" autocomplete="off" required />
+      </div>
+      <div class="field">
+        <label for="code">Código de votación</label>
+        <input id="code" pattern="[A-Fa-f0-9]{12}" minlength="12" maxlength="12" required />
+      </div>
+      <button class="btn primary" type="submit">Consultar resultados</button>
+    </form>
+
+    <p id="notice" class="message" role="status"></p>
+    <div id="summary" hidden>
+      <h2 id="question"></h2>
+      <p id="status" class="muted"></p>
+      <p id="connectionStatus" class="connection-status" role="status" aria-live="polite"></p>
+      <p id="participation"></p>
+      <div id="results" class="results"></div>
+      <p id="winner" class="message"></p>
+      <button id="exportButton" class="btn secondary" type="button" hidden>Descargar CSV</button>
+    </div>
+  </section>
+</MainLayout>
+
+<script>
+  import { ApiResponseError, getApiErrorMessage, readApiResponse } from "../lib/client-api";
+
+  interface Results {
+    code: string;
+    question: string;
+    status: "draft" | "open" | "closed";
+    createdAt: string;
+    closedAt: string | null;
+    participation: {
+      authorized: number;
+      totalVotes: number;
+      pending: number;
+      percentage: number;
+    };
+    options: { name: string; votes: number; percentage: number }[];
+    winner: { type: "winner" | "tie"; options: string[]; votes: number } | null;
+  }
+
+  const form = document.querySelector<HTMLFormElement>("#resultsForm");
+  const notice = document.querySelector<HTMLElement>("#notice");
+  const summary = document.querySelector<HTMLElement>("#summary");
+  const question = document.querySelector<HTMLElement>("#question");
+  const status = document.querySelector<HTMLElement>("#status");
+  const participation = document.querySelector<HTMLElement>("#participation");
+  const results = document.querySelector<HTMLElement>("#results");
+  const winner = document.querySelector<HTMLElement>("#winner");
+  const connectionStatus = document.querySelector<HTMLElement>("#connectionStatus");
+  const exportButton = document.querySelector<HTMLButtonElement>("#exportButton");
+  const codeFromUrl = new URLSearchParams(window.location.search).get("code");
+  const codeInput = document.querySelector<HTMLInputElement>("#code");
+  if (codeInput && codeFromUrl) codeInput.value = codeFromUrl.toUpperCase();
+  let loading = false;
+  let interval: number | undefined;
+  let retryTimer: number | undefined;
+  let retryAttempts = 0;
+
+  function statusLabel(value: Results["status"]) {
+    return value === "draft" ? "Borrador" : value === "open" ? "Abierta" : "Cerrada";
+  }
+
+  function setConnectionStatus(message: string, connected: boolean) {
+    if (!connectionStatus) return;
+    connectionStatus.textContent = message;
+    connectionStatus.classList.toggle("connection-online", connected);
+    connectionStatus.classList.toggle("connection-offline", !connected);
+  }
+
+  function scheduleRetry() {
+    if (retryAttempts >= 3 || retryTimer) return;
+    retryAttempts += 1;
+    const delay = 1000 * 2 ** (retryAttempts - 1);
+    setConnectionStatus(`Sin conexión. Reintentando en ${delay / 1000} segundo(s) (${retryAttempts}/3)...`, false);
+    retryTimer = window.setTimeout(() => {
+      retryTimer = undefined;
+      void refresh();
+    }, delay);
+  }
+
+  async function refresh() {
+    if (loading) return;
+    const key = document.querySelector<HTMLInputElement>("#adminKey")?.value;
+    const code = document.querySelector<HTMLInputElement>("#code")?.value.trim().toUpperCase();
+    if (!key || !code) return;
+
+    loading = true;
+    try {
+      const response = await fetch(`/API/polls/${encodeURIComponent(code)}/results`, {
+        headers: { "x-admin-key": key }
+      });
+      const data = await readApiResponse<{ error?: string } & Partial<Results>>(response);
+      if (!response.ok) throw new Error(data.error ?? "No se pudieron consultar los resultados");
+      const dataResults = data as Results;
+      retryAttempts = 0;
+      setConnectionStatus(
+        navigator.onLine ? "Conectado · resultados actualizados." : "Sin conexión. Se muestran los últimos resultados.",
+        navigator.onLine
+      );
+
+      if (summary) summary.hidden = false;
+      if (notice) notice.textContent = "";
+      if (question) question.textContent = dataResults.question;
+      if (status) status.textContent = `Estado: ${statusLabel(dataResults.status)}`;
+      if (participation) {
+        participation.textContent = `Participación: ${dataResults.participation.totalVotes} votos de ${dataResults.participation.authorized} autorizados (${dataResults.participation.percentage} %). Pendientes: ${dataResults.participation.pending}.`;
+      }
+      if (results) {
+        results.replaceChildren();
+        dataResults.options.forEach((option) => {
+          const row = document.createElement("div");
+          row.className = "result-row";
+          const chart = document.createElement("div");
+          chart.className = "result-chart";
+          const label = document.createElement("strong");
+          label.textContent = option.name;
+          const value = document.createElement("span");
+          value.textContent = `${option.votes} votos (${option.percentage} %)`;
+          const bar = document.createElement("div");
+          bar.className = "result-bar";
+          bar.setAttribute("role", "img");
+          bar.setAttribute("aria-label", `${option.name}: ${option.percentage} por ciento`);
+          const fill = document.createElement("span");
+          fill.style.width = `${Math.min(100, Math.max(0, option.percentage))}%`;
+          bar.appendChild(fill);
+          chart.appendChild(bar);
+          chart.appendChild(value);
+          row.appendChild(label);
+          row.appendChild(chart);
+          results.appendChild(row);
+        });
+      }
+      if (winner) {
+        winner.textContent = dataResults.winner
+          ? dataResults.winner.type === "tie"
+            ? `Empate: ${dataResults.winner.options.join(", ")} con ${dataResults.winner.votes} votos.`
+            : `Ganador: ${dataResults.winner.options[0]} con ${dataResults.winner.votes} votos.`
+          : "Todavía no hay votos suficientes para determinar un ganador.";
+      }
+      if (exportButton) exportButton.hidden = dataResults.status !== "closed";
+      if (interval && dataResults.status === "closed") {
+        window.clearInterval(interval);
+        interval = undefined;
+      }
+    } catch (error) {
+      if (notice) notice.textContent = getApiErrorMessage(error);
+      setConnectionStatus("No se pudo actualizar la conexión.", false);
+      if (
+        error instanceof TypeError ||
+        (error instanceof ApiResponseError && error.status >= 500)
+      ) {
+        scheduleRetry();
+      }
+    } finally {
+      loading = false;
+    }
+  }
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (interval) window.clearInterval(interval);
+    if (retryTimer) window.clearTimeout(retryTimer);
+    retryTimer = undefined;
+    retryAttempts = 0;
+    void refresh();
+    interval = window.setInterval(() => void refresh(), 2000);
+  });
+
+  window.addEventListener("online", () => {
+    retryAttempts = 0;
+    setConnectionStatus("Conexión restaurada. Actualizando...", true);
+    void refresh();
+  });
+  window.addEventListener("offline", () => {
+    setConnectionStatus("Sin conexión. Se reintentará automáticamente.", false);
+  });
+
+  exportButton?.addEventListener("click", async () => {
+    if (loading) return;
+    const key = document.querySelector<HTMLInputElement>("#adminKey")?.value;
+    const code = document.querySelector<HTMLInputElement>("#code")?.value.trim().toUpperCase();
+    if (!key || !code) return;
+    exportButton.disabled = true;
+    if (notice) notice.textContent = "Preparando descarga...";
+    try {
+      const response = await fetch(`/API/polls/${encodeURIComponent(code)}/export`, {
+        headers: { "x-admin-key": key }
+      });
+      if (!response.ok) {
+        const data = await readApiResponse<{ error?: string }>(response);
+        throw new Error(data.error ?? "No se pudo exportar el CSV");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `votalive-${code}-resultados.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      if (notice) notice.textContent = "CSV descargado correctamente.";
+    } catch (error) {
+      if (notice) notice.textContent = getApiErrorMessage(error);
+    } finally {
+      exportButton.disabled = false;
+    }
+  });
+</script>
